@@ -70,14 +70,14 @@ void Car :: canProcess(MCP_CAN *CAN)
 					bitRead ( rxBuf[CAN_DOOR_BYTE], CAN_DOOR_REAR_LEFT_BIT    ), 
 					bitRead ( rxBuf[CAN_DOOR_BYTE], CAN_DOOR_REAR_RIGHT_BIT   )
 				);
-//				Serial.println(msgString);
+				Serial.println(msgString);
 				#endif
                 
 			}
 			if (rxId == CAN_SPEED_ID){
 				speed = (float)( rxBuf[CAN_SPEED_BYTE_1] * 256 + rxBuf[CAN_SPEED_BYTE_2] ) / 100;
 				#ifdef DEBUG
-  				sprintf(msgString, "- speed: %d.%d | %d %d", (int)speed , (int)(speed*100-trunc(speed)*100), rxBuf[CAN_SPEED_BYTE_1],rxBuf[CAN_SPEED_BYTE_2]);
+  				sprintf(msgString, "- speed: %d.%d", (int)speed , (int)(speed*100-trunc(speed)*100));
   				Serial.println(msgString);
 				#endif				
 			}	
@@ -133,10 +133,10 @@ void setup()
 	digitalWrite(LED_GREEN, HIGH);
 }
 
-void up(int s){
+void light_up(int s){
   digitalWrite(s, LOW);
 }
-void down(int s){
+void light_down(int s){
   digitalWrite(s, HIGH);
 }
 
@@ -151,12 +151,12 @@ void loop()
 	//		and light	
 	if (true){
 		if (car.speed<80){
-		  down(LED_RED);
+		  light_down(LED_RED);
 		  wasTone = false;
 		}
 		
 		if (car.speed>=80 and !wasTone){
-		  up(LED_RED);   
+		  light_up(LED_RED);   
 		  tone(BEEPER,2000,300);
 		  delay(300);
 		  noTone(BEEPER);
@@ -165,24 +165,18 @@ void loop()
 	}
   
 	// SERVISE (CLOSE DOORS)
-	// If speed is higher than 20 and one of the doors was opened then
+	// If speed is higher than 10 and one of the doors was opened then
 	// than send 1 second to HIGH on PIN_TO_LOCK 
 	// 		and make a beep sound on BEEPER
 	if (true){
 		wasOpened = wasOpened || car.doorFrontLeft.getState() || car.doorFrontRight.getState() || car.doorRearLeft.getState() || car.doorRearRight.getState();
-		if (wasOpened & car.speed > 20 & !car.doorFrontLeft.getState() & !car.doorFrontRight.getState() & !car.doorRearLeft.getState() & !car.doorRearRight.getState()){
-			#ifdef DEBUG
-			sprintf(msgString, "+ %d %d %d %d | %f", car.doorFrontLeft.getState(), car.doorFrontRight.getState(), car.doorRearLeft.getState(), car.doorRearRight.getState(), car.speed/100);
-			Serial.println(msgString);
-			#endif
-	   
+		if (wasOpened & car.speed > 10 & !car.doorFrontLeft.getState() & !car.doorFrontRight.getState() & !car.doorRearLeft.getState() & !car.doorRearRight.getState()){
 			tone(BEEPER, 1000,100);
-			delay(100);              
+      digitalWrite(PIN_TO_LOCK, HIGH);
+			delay(300);              
 			noTone(BEEPER);	
-				
-			digitalWrite(PIN_TO_LOCK, HIGH);
-			delay(1000);
-			digitalWrite(PIN_TO_LOCK, LOW);      				
+      digitalWrite(PIN_TO_LOCK, LOW);             		
+
 			wasOpened = false;      
 		}
 	}
