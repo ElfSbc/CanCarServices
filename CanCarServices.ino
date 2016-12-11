@@ -5,17 +5,21 @@
 
 #include <SPI.h>
 #include <mcp_can.h>
+#include "U8glib.h"
+U8GLIB_SSD1306_128X64 u8g(U8G_I2C_OPT_NONE|U8G_I2C_OPT_DEV_0);  // I2C / TWI 
+
 
 // pin settings
 #define SPI_CS_PIN			            	10				// pin for CS CAN
-#define PIN_TO_LOCK                 		8
+#define PIN_TO_LOCK                 		5
 
-#define BEEPER							3
+#define BEEPER							9
+#define BEEPER_GROUND       6
 
-#define LED_RED                       7
-#define LED_GROUND                    6
-#define LED_GREEN                      5
-#define LED_BLUE                    4
+#define LED_RED                       8
+#define LED_GROUND                    7
+//#define LED_GREEN                   5
+//#define LED_BLUE                    4
 
 
 
@@ -99,6 +103,15 @@ char msgString[150];
 void setup()
 {
   Serial.begin(115200);
+
+  /*
+  u8g.firstPage();  
+  do {
+    u8g.setFont(u8g_font_unifont);
+    u8g.drawStr( 0, 22, "Mazda CX-5");
+  } while( u8g.nextPage() );
+*/
+  
   Serial.println("=======================OK========================\n");
   if(CAN0.begin(MCP_ANY, CAN_SPEED, CAN_FREQ) == CAN_OK) {
 		#ifdef DEBUG
@@ -119,6 +132,9 @@ void setup()
 	
 	pinMode(BEEPER, OUTPUT);   
 	digitalWrite(BEEPER, LOW);
+  
+  pinMode(  BEEPER_GROUND, OUTPUT);   
+  digitalWrite(  BEEPER_GROUND, LOW);
 
 	pinMode(LED_RED, OUTPUT);   
 	digitalWrite(LED_RED, HIGH);
@@ -126,11 +142,11 @@ void setup()
 	pinMode(LED_GROUND, OUTPUT);   
 	digitalWrite(LED_GROUND, HIGH);
 
-	pinMode(LED_BLUE, OUTPUT);   
-	digitalWrite(LED_BLUE, HIGH);
+//	pinMode(LED_BLUE, OUTPUT);   
+//	digitalWrite(LED_BLUE, HIGH);
 
-	pinMode(LED_GREEN, OUTPUT);   
-	digitalWrite(LED_GREEN, HIGH);
+//	pinMode(LED_GREEN, OUTPUT);   
+//	digitalWrite(LED_GREEN, HIGH);
 }
 
 void light_up(int s){
@@ -143,8 +159,9 @@ void light_down(int s){
 
 void loop()
 {
+  
 	car.canProcess(&CAN0);
-
+  //car.speed = 30;
 	// SERVISE (SPEED ALARM)
 	// If speed greate than 80 Km/h)
 	// Than Beep 
@@ -157,8 +174,8 @@ void loop()
 		
 		if (car.speed>=80 and !wasTone){
 		  light_up(LED_RED);   
-		  tone(BEEPER,2000,300);
-		  delay(300);
+		  tone(BEEPER,2000,200);
+		  delay(200);
 		  noTone(BEEPER);
 		  wasTone=true;
 		}
@@ -171,15 +188,42 @@ void loop()
 	if (true){
 		wasOpened = wasOpened || car.doorFrontLeft.getState() || car.doorFrontRight.getState() || car.doorRearLeft.getState() || car.doorRearRight.getState();
 		if (wasOpened & car.speed > 10 & !car.doorFrontLeft.getState() & !car.doorFrontRight.getState() & !car.doorRearLeft.getState() & !car.doorRearRight.getState()){
-			tone(BEEPER, 1000,100);
+
       digitalWrite(PIN_TO_LOCK, HIGH);
-			delay(300);              
-			noTone(BEEPER);	
+      tone(BEEPER, 1000,100);
+			delay(100);                   
+      noTone(BEEPER);       
       digitalWrite(PIN_TO_LOCK, LOW);             		
 
 			wasOpened = false;      
 		}
 	}
+
+
+  //DISPLAY STATE
+  if (true){
+      car.doorRearLeft.setState(true);
+      car.speed=88.89;
+      u8g.setColorIndex(255);     // white
+    
+      u8g.firstPage();  
+      do {
+        u8g.setFont(u8g_font_unifont);
+        sprintf(msgString, "Speed: %d.%d",  (int)car.speed , (int)(car.speed*100-trunc(car.speed)*100)
+        );
+        u8g.drawStr( 0, 15, msgString);
+        sprintf(msgString, "   %d %d",  
+                  car.doorFrontLeft.getState(),
+                  car.doorFrontRight.getState()
+        );
+        u8g.drawStr( 0, 30, msgString);
+        sprintf(msgString, "   %d %d",  
+                  car.doorRearLeft.getState(),
+                  car.doorRearRight.getState()              
+        );
+        u8g.drawStr( 0, 45, msgString);        
+      } while( u8g.nextPage() );
+  }
    
 }
   
