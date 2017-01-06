@@ -1,9 +1,7 @@
 // Volvo xc-70 
 
-// we should set x2 of real speed
-// if real speed is 125KBPS we should set CAN_250KBPS
-#define CAN_SPEED			            	CAN_1000KBPS		// can speed settings
-#define CAN_FREQ			            	MCP_16MHZ		// can frequency
+#define CAN_SPEED			            	CAN_500KBPS		// can speed settings
+#define CAN_FREQ			            	MCP_8MHZ		// can frequency
 
 #define CAN_DOOR_ID			            	0x3EE			// can packet id for doors
 #define CAN_DOOR_BYTE			          	2

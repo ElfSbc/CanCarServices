@@ -1,7 +1,12 @@
-#include "settings_mazda_cx5.h"
-//#include "settings_volvo_xc70.h"
+//#include "settings_mazda_cx5.h"
+#include "settings_volvo_xc70.h"
 
-//#define DEBUG 
+//#define DEBUG
+#define SERVICE_DISPLAY_STATE
+#define SERVICE_SPEED_ALARM
+#define SERVICE_CLOSE_DOORS
+
+
 
 #include <SPI.h>
 #include <mcp_can.h>
@@ -51,21 +56,52 @@ class Car{
 		Door doorRearRight 	;
 		
 		Car ();		
-		void canProcess(MCP_CAN *CAN);
+		bool canProcess(MCP_CAN *CAN);
 };
 
 Car :: Car (){
 };
 
-void Car :: canProcess(MCP_CAN *CAN)
+bool Car :: canProcess(MCP_CAN *CAN)
 		{
+      bool is_changed;
+      is_changed=false;
 
 			CAN->readMsgBuf(&rxId, &len, rxBuf);
+
+
+        #ifdef DEBUG          
+          if((rxId & 0x80000000) == 0x80000000)     // Determine if ID is standard (11 bits) or extended (29 bits)
+            sprintf(msgString, "E: %.8lX  DLC: %1d  Data:", (rxId & 0x1FFFFFFF), len);
+          else
+            sprintf(msgString, "S: %.3lX       DLC: %1d  Data:", rxId, len);
+          
+          Serial.print(msgString);
+          
+          for(byte i = 0; i<len; i++){
+            sprintf(msgString, " %.2X", rxBuf[i]);
+            Serial.print(msgString);
+          }
+          for(byte i = len; i<8; i++){
+          sprintf(msgString, " 00");
+          Serial.print(msgString);
+          }
+          Serial.println();
+         #endif
+
+      
 			if (rxId == CAN_DOOR_ID){	
-				doorFrontLeft. setState	( bitRead ( rxBuf[CAN_DOOR_BYTE], CAN_DOOR_FRONT_LEFT_BIT   ));
-				doorFrontRight.setState	( bitRead ( rxBuf[CAN_DOOR_BYTE], CAN_DOOR_FRONT_RIGHT_BIT  ));
-				doorRearLeft.  setState	( bitRead ( rxBuf[CAN_DOOR_BYTE], CAN_DOOR_REAR_LEFT_BIT    ));
-				doorRearRight. setState	( bitRead ( rxBuf[CAN_DOOR_BYTE], CAN_DOOR_REAR_RIGHT_BIT   ));
+        bool fl = !bitRead ( rxBuf[CAN_DOOR_BYTE], CAN_DOOR_FRONT_LEFT_BIT   );
+        bool fr = !bitRead ( rxBuf[CAN_DOOR_BYTE], CAN_DOOR_FRONT_RIGHT_BIT  );
+        bool rl = !bitRead ( rxBuf[CAN_DOOR_BYTE], CAN_DOOR_REAR_LEFT_BIT    );
+        bool rr = !bitRead ( rxBuf[CAN_DOOR_BYTE], CAN_DOOR_REAR_RIGHT_BIT   );
+        if ((fl != doorFrontLeft. getState()) || (fr != doorFrontRight. getState())  || rl !=doorRearLeft. getState() || rr != doorRearRight. getState()){
+            is_changed=true;
+    				doorFrontLeft. setState	(fl);
+    				doorFrontRight.setState	(fr);
+    				doorRearLeft.  setState	(rl);
+    				doorRearRight. setState	(rr);
+        }
 
 				#ifdef DEBUG
 				sprintf(msgString, "- %d %d %d %d", 
@@ -75,16 +111,23 @@ void Car :: canProcess(MCP_CAN *CAN)
 					bitRead ( rxBuf[CAN_DOOR_BYTE], CAN_DOOR_REAR_RIGHT_BIT   )
 				);
 				Serial.println(msgString);
+//        Serial.println("\n");
 				#endif
                 
 			}
 			if (rxId == CAN_SPEED_ID){
-				speed = (float)( rxBuf[CAN_SPEED_BYTE_1] * 256 + rxBuf[CAN_SPEED_BYTE_2] ) / 100;
-				#ifdef DEBUG
-  				sprintf(msgString, "- speed: %d.%d", (int)speed , (int)(speed*100-trunc(speed)*100));
-  				Serial.println(msgString);
-				#endif				
+        float speedd = (float)( float(rxBuf[CAN_SPEED_BYTE_1] * 256 + rxBuf[CAN_SPEED_BYTE_2]) ) / (float)100;
+        
+				if (speedd != speed){
+            is_changed=true;				
+            speed = speedd;
+    				#ifdef DEBUG
+      				sprintf(msgString, "- speed: %d.%d", (int)speed , (int)(speed*1000-trunc(speed)*1000));
+      				Serial.println(msgString);
+    				#endif				
+         }
 			}	
+      return is_changed;
 		};
 
 /////////////////////////////////////////////////////
@@ -160,70 +203,73 @@ void light_down(int s){
 void loop()
 {
   
-	car.canProcess(&CAN0);
-  //car.speed = 30;
-	// SERVISE (SPEED ALARM)
-	// If speed greate than 80 Km/h)
-	// Than Beep 
-	//		and light	
-	if (true){
-		if (car.speed<80){
-		  light_down(LED_RED);
-		  wasTone = false;
-		}
-		
-		if (car.speed>=80 and !wasTone){
-		  light_up(LED_RED);   
-		  tone(BEEPER,2000,200);
-		  delay(200);
-		  noTone(BEEPER);
-		  wasTone=true;
-		}
-	}
-  
-	// SERVISE (CLOSE DOORS)
-	// If speed is higher than 10 and one of the doors was opened then
-	// than send 1 second to HIGH on PIN_TO_LOCK 
-	// 		and make a beep sound on BEEPER
-	if (true){
-		wasOpened = wasOpened || car.doorFrontLeft.getState() || car.doorFrontRight.getState() || car.doorRearLeft.getState() || car.doorRearRight.getState();
-		if (wasOpened & car.speed > 10 & !car.doorFrontLeft.getState() & !car.doorFrontRight.getState() & !car.doorRearLeft.getState() & !car.doorRearRight.getState()){
+	if (car.canProcess(&CAN0)){
+      
+    	// SERVISE (SPEED ALARM)
+    	// If speed greate than 80 Km/h)
+    	// Than Beep 
+    	//		and light	
+    	#ifdef SERVICE_SPEED_ALARM
+    		if (car.speed<80){
+    		  light_down(LED_RED);
+    		  wasTone = false;
+    		}
+    		
+    		if (car.speed>=80 and !wasTone){
+    		  light_up(LED_RED);   
+    		  tone(BEEPER,2000,200);
+    		  delay(200);
+    		  noTone(BEEPER);
+    		  wasTone=true;
+    		}
+    	#endif
+      
+    	// SERVISE (CLOSE DOORS)
+      #ifdef SERVICE_CLOSE_DOORS`
+      	// If speed is higher than 10 and one of the doors was opened then
+      	// than send 1 second to HIGH on PIN_TO_LOCK 
+      	// 		and make a beep sound on BEEPER
 
-      digitalWrite(PIN_TO_LOCK, HIGH);
-      tone(BEEPER, 1000,100);
-			delay(100);                   
-      noTone(BEEPER);       
-      digitalWrite(PIN_TO_LOCK, LOW);             		
-
-			wasOpened = false;      
-		}
-	}
-
-
-  //DISPLAY STATE
-  if (true){
-      car.doorRearLeft.setState(true);
-      car.speed=88.89;
-      u8g.setColorIndex(255);     // white
+        //Serial.println("aaaaa");
+    		wasOpened = wasOpened || car.doorFrontLeft.getState() || car.doorFrontRight.getState() || car.doorRearLeft.getState() || car.doorRearRight.getState();
+    		if (wasOpened & car.speed > 7 & !car.doorFrontLeft.getState() & !car.doorFrontRight.getState() & !car.doorRearLeft.getState() & !car.doorRearRight.getState()){
+          Serial.println("dddd");
+          //digitalWrite(PIN_TO_LOCK, HIGH);
+          tone(BEEPER, 1000,100);
+    			delay(100);                   
+          noTone(BEEPER);       
+          //digitalWrite(PIN_TO_LOCK, LOW);             		   
     
-      u8g.firstPage();  
-      do {
-        u8g.setFont(u8g_font_unifont);
-        sprintf(msgString, "Speed: %d.%d",  (int)car.speed , (int)(car.speed*100-trunc(car.speed)*100)
-        );
-        u8g.drawStr( 0, 15, msgString);
-        sprintf(msgString, "   %d %d",  
-                  car.doorFrontLeft.getState(),
-                  car.doorFrontRight.getState()
-        );
-        u8g.drawStr( 0, 30, msgString);
-        sprintf(msgString, "   %d %d",  
-                  car.doorRearLeft.getState(),
-                  car.doorRearRight.getState()              
-        );
-        u8g.drawStr( 0, 45, msgString);        
-      } while( u8g.nextPage() );
-  }
+    			wasOpened = false;      
+    		}
+    	#endif
+    
+    
+      //DISPLAY STATE
+      #ifdef SERVICE_DISPLAY_STATE 
+    //      car.doorRearLeft.setState(true);
+    //      car.speed=88.89;
+          u8g.setColorIndex(255);     // white
+        
+          u8g.firstPage();  
+          do {
+            u8g.setFont(u8g_font_unifont);
+            sprintf(msgString, "Speed: %d.%d",  (int)car.speed , (int)((float)car.speed*10.0-(float)trunc((float)car.speed)*10.0)
+            );
+            u8g.drawStr( 0, 15, msgString);
+            sprintf(msgString, "   %d %d",  
+                      car.doorFrontLeft.getState(),
+                      car.doorFrontRight.getState()
+            );
+            u8g.drawStr( 0, 30, msgString);
+            sprintf(msgString, "   %d %d",  
+                      car.doorRearLeft.getState(),
+                      car.doorRearRight.getState()              
+            );
+            u8g.drawStr( 0, 45, msgString);        
+          } while( u8g.nextPage() );
+      #endif
+	}
    
 }
   
